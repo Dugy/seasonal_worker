@@ -5,7 +5,7 @@ int main()
 {
 	std::cout << "Test1" << std::endl;
 	{
-		SeasonalWorker worker;
+		const SeasonalWorker worker;
 
 		std::cout << "Test 1" << std::endl;
 		worker.addTask([] () {

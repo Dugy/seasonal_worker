@@ -16,16 +16,16 @@
 #include <iostream>
 
 class SeasonalWorker {
-	std::vector<std::function<void()>> tasks_;
-	std::mutex tasksMutex_;
-	std::mutex workingMutex_;
-	std::mutex sleepCheckMutex_;
-	std::condition_variable workingCondvar_;
+	mutable std::vector<std::function<void()>> tasks_;
+	mutable std::mutex tasksMutex_;
+	mutable std::mutex workingMutex_;
+	mutable std::mutex sleepCheckMutex_;
+	mutable std::condition_variable workingCondvar_;
 	std::thread workerThread_;
 	bool willExit_ = false;
-	bool willDiscardTasks_ = false;
+	mutable bool willDiscardTasks_ = false;
 
-	void seasonallyWork() {
+	inline void seasonallyWork() const {
 		std::unique_lock<std::mutex> workingLock(workingMutex_);
 		std::vector<std::function<void()>> currentTasks;
 		while (true) {
@@ -59,7 +59,7 @@ class SeasonalWorker {
 		}
 	}
 
-	void unlock() {
+	inline void unlock() const {
 		std::unique_lock<std::mutex> sleepLock(sleepCheckMutex_, std::defer_lock);
 		if (!sleepLock.try_lock()) {
 			std::unique_lock<std::mutex> sleepLock(workingMutex_);
@@ -74,14 +74,14 @@ public:
 	* \param The function that is called periodically
 	* \param If the thread starts running or is paused until resume() is called
 	*/
-	SeasonalWorker() : workerThread_(&SeasonalWorker::seasonallyWork, this) {
+	inline SeasonalWorker() : workerThread_(&SeasonalWorker::seasonallyWork, this) {
 
 	}
 
 	/*!
 	* \brief Destructor, exits immediately or finishes all tasks (if there are any) and exits
 	*/
-	~SeasonalWorker() {
+	inline ~SeasonalWorker() {
 		willExit_ = true;
 		unlock();
 		workerThread_.join();
@@ -92,7 +92,7 @@ public:
 	*
 	* \note It may be useful to call this before the destructor
 	*/
-	void discardTasks() {
+	inline void discardTasks() const {
 		willDiscardTasks_ = true;
 	}
 
@@ -102,7 +102,7 @@ public:
 	*
 	* \note The call is thread-safe
 	*/
-	void addTask(const std::function<void()>& task) {
+	inline void addTask(const std::function<void()>& task) const {
 		{
 			std::lock_guard<std::mutex> guard(tasksMutex_);
 			tasks_.push_back(task);
@@ -116,7 +116,7 @@ public:
 	*
 	* \note The call is thread-safe
 	*/
-	void addTask(std::function<void()>&& task) {
+	inline void addTask(std::function<void()>&& task) const {
 		{
 			std::lock_guard<std::mutex> guard(tasksMutex_);
 			tasks_.push_back(task);
