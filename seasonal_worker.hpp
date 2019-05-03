@@ -21,9 +21,9 @@ class SeasonalWorker {
 	mutable std::mutex workingMutex_;
 	mutable std::mutex sleepCheckMutex_;
 	mutable std::condition_variable workingCondvar_;
-	std::thread workerThread_;
 	bool willExit_ = false;
 	mutable bool willDiscardTasks_ = false;
+	std::thread workerThread_; // Must be initialised last
 
 	inline void seasonallyWork() const {
 		std::unique_lock<std::mutex> workingLock(workingMutex_);
