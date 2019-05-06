@@ -18,61 +18,49 @@
 class SeasonalWorker {
 	mutable std::vector<std::function<void()>> tasks_;
 	mutable std::mutex tasksMutex_;
-	mutable std::mutex workingMutex_;
-	mutable std::mutex sleepCheckMutex_;
 	mutable std::condition_variable workingCondvar_;
 	bool willExit_ = false;
 	mutable bool willDiscardTasks_ = false;
 	std::thread workerThread_; // Must be initialised last
 
 	inline void seasonallyWork() const {
-		std::unique_lock<std::mutex> workingLock(workingMutex_);
+		std::unique_lock<std::mutex> lock(tasksMutex_, std::defer_lock);
 		std::vector<std::function<void()>> currentTasks;
 		while (true) {
-			for (const std::function<void()>& func : currentTasks) {
+			for (unsigned int i = 0; i < currentTasks.size(); i++) {
 				try {
-					func();
+					currentTasks[i]();
 				} catch(std::exception& e) {
 					std::cerr << "SeasonalWorker job error: " << e.what() << std::endl;
 				} catch(...) {
 					std::cerr << "Unknown job error in SeasonalWorker" << std::endl;
 				}
 				if (willDiscardTasks_) {
-					std::lock_guard<std::mutex> guard(tasksMutex_);
 					tasks_.clear();
 					willDiscardTasks_ = false;
 					break;
 				}
 			}
 			currentTasks.clear();
-			{
-				std::unique_lock<std::mutex> sleepLock(sleepCheckMutex_);
-				{
-					std::lock_guard<std::mutex> guard(tasksMutex_);
-					std::swap(tasks_, currentTasks);
-				}
-				if (currentTasks.empty()) {
-					if (willExit_) break;
-					workingCondvar_.wait(workingLock);
-				}
+			lock.lock();
+			std::swap(tasks_, currentTasks);
+			if (currentTasks.empty()) {
+				if (willExit_) break;
+				workingCondvar_.wait(lock, [this, &currentTasks] () {
+					return (!willExit_ && currentTasks.empty());
+				});
 			}
+			lock.unlock();
 		}
 	}
 
 	inline void unlock() const {
-		std::unique_lock<std::mutex> sleepLock(sleepCheckMutex_, std::defer_lock);
-		if (!sleepLock.try_lock()) {
-			std::unique_lock<std::mutex> sleepLock(workingMutex_);
-			workingCondvar_.notify_one();
-		}
+		workingCondvar_.notify_one();
 	}
 
 public:
 	/*!
 	* \brief Constructs the thread and becomes ready to perform the tasks
-	* \param The calling period
-	* \param The function that is called periodically
-	* \param If the thread starts running or is paused until resume() is called
 	*/
 	inline SeasonalWorker() : workerThread_(&SeasonalWorker::seasonallyWork, this) {
 
@@ -82,8 +70,11 @@ public:
 	* \brief Destructor, exits immediately or finishes all tasks (if there are any) and exits
 	*/
 	inline ~SeasonalWorker() {
-		willExit_ = true;
-		unlock();
+		{
+			std::lock_guard<std::mutex> guard(tasksMutex_);
+			willExit_ = true;
+			unlock();
+		}
 		workerThread_.join();
 	}
 
@@ -103,10 +94,8 @@ public:
 	* \note The call is thread-safe
 	*/
 	inline void addTask(const std::function<void()>& task) const {
-		{
-			std::lock_guard<std::mutex> guard(tasksMutex_);
-			tasks_.push_back(task);
-		}
+		std::lock_guard<std::mutex> guard(tasksMutex_);
+		tasks_.push_back(task);
 		unlock();
 	}
 
@@ -117,10 +106,8 @@ public:
 	* \note The call is thread-safe
 	*/
 	inline void addTask(std::function<void()>&& task) const {
-		{
-			std::lock_guard<std::mutex> guard(tasksMutex_);
-			tasks_.push_back(task);
-		}
+		std::lock_guard<std::mutex> guard(tasksMutex_);
+		tasks_.push_back(task);
 		unlock();
 	}
 };

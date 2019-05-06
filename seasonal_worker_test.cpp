@@ -32,7 +32,7 @@ int main()
 			std::this_thread::sleep_for(std::chrono::milliseconds(200));
 			std::cout << "First task done" << std::endl;
 		});
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		worker.addTask([] () {
 			std::this_thread::sleep_for(std::chrono::milliseconds(200));
 			std::cout << "Second task done" << std::endl;
