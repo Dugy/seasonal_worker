@@ -47,7 +47,7 @@ class SeasonalWorker {
 			if (currentTasks.empty()) {
 				if (willExit_) break;
 				workingCondvar_.wait(lock, [this, &currentTasks] () {
-					return (!willExit_ && currentTasks.empty());
+					return (willExit_ || !currentTasks.empty());
 				});
 			}
 			lock.unlock();
