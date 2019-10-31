@@ -47,6 +47,7 @@ class SeasonalWorker {
 			if (currentTasks.empty()) {
 				if (willExit_) break;
 				workingCondvar_.wait(lock, [this, &currentTasks] () {
+					std::swap(tasks_, currentTasks);
 					return (willExit_ || !currentTasks.empty());
 				});
 			}
